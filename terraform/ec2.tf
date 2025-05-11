@@ -12,6 +12,6 @@ resource "aws_instance" "web_server" {
   ]
 
   tags = {
-    Name = "StellarPathWebServer"
+    Name = "innerlens-website"
   }
 }

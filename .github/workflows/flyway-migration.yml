@@ -9,7 +9,10 @@ on:
   push:
     branches: [main]
     paths:
-      - 'API/src/StellarPath.API/db/migrations/**'
+      - 'terraform/scripts/**'
+
+env:
+  AWS_REGION: af-south-1
 
 jobs:
   migrate:
@@ -21,17 +24,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4.0.1
+      - name: Configure AWS credentials using OIDC
+        uses: aws-actions/configure-aws-credentials@v2
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsOIDCRole
-          role-session-name: GitHub_to_AWS_via_FederatedOIDC
-          aws-region: af-south-1
+          role-to-assume: arn:aws:iam::229582503298:role/GitHubActionsOIDCRole
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Verify AWS access
         run: |
           aws sts get-caller-identity
-          aws s3 ls s3://stellar-path-s3-bucket/ || echo "Cannot list bucket contents"
+          aws s3 ls s3://innerlens-website-path-s3-bucket/ || echo "Cannot list bucket contents"
 
       - name: Setup and initialize Terraform
         uses: hashicorp/setup-terraform@v2
@@ -55,10 +57,12 @@ jobs:
       - name: Install PostgreSQL Client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
-      - name: Run Flyway validate and migrate
-        uses: joshuaavalon/flyway-action@v3.0.0
-        with:
-          url: jdbc:postgresql://${{ steps.tf-outputs.outputs.rds_endpoint }}/stellarpath_db
-          user: ${{ secrets.DATABASE_USERNAME }}
-          password: ${{ secrets.DATABASE_PASSWORD }}
-          locations: filesystem:API/src/StellarPath.API/db/migrations
+      - name: Run Flyway Migration
+        run: |
+          flyway -url=jdbc:postgresql://${{ steps.tf-outputs.outputs.rds_endpoint }}/innerlens_website_db \
+                 -user=${{ env.DB_USER }} \
+                 -password=${{ env.DB_PASS }} \
+                 -locations=filesystem:terraform/scripts \
+                 migrate
+
+

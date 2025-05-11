@@ -31,86 +31,6 @@ resource "aws_iam_role" "github_actions" {
   })
 }
 
-data "aws_iam_policy_document" "ecs_task_execution_policy" {
-  statement {
-    actions = [
-      "secretsmanager:GetSecretValue",
-      "ssm:GetParameters",
-      "ssm:GetParameter"
-    ]
-    resources = [
-      aws_secretsmanager_secret.jwt_secret.arn,
-      aws_secretsmanager_secret.db_connection.arn,
-      aws_secretsmanager_secret.google_client_id.arn,
-      aws_secretsmanager_secret.api_key_1.arn,
-      aws_secretsmanager_secret.api_key_2.arn
-    ]
-  }
-}
-
-
-resource "aws_iam_role_policy" "ecs_task_execution_secrets" {
-  name   = "${var.app_name}-task-execution-secrets-policy"
-  role   = aws_iam_role.ecs_task_execution.id
-  policy = data.aws_iam_policy_document.ecs_task_execution_policy.json
-}
-
-resource "aws_iam_role" "ecs_task_execution" {
-  name = "${var.app_name}-ecs-task-execution-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Effect = "Allow",
-        Principal = {
-          Service = "ecs-tasks.amazonaws.com"
-        },
-        Action = "sts:AssumeRole"
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role" "ecs_task_role" {
-  name = "${var.app_name}-task-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Effect = "Allow",
-        Principal = {
-          Service = "ecs-tasks.amazonaws.com"
-        },
-        Action = "sts:AssumeRole"
-      }
-    ]
-  })
-}
-
-resource "aws_iam_policy" "ecs_task_s3_read_only" {
-  name        = "${var.app_name}-task-s3-read-only-policy"
-  description = "Allows read-only access to the Terraform state S3 bucket"
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow",
-        Action = [
-          "s3:GetObject",
-          "s3:PutObject",
-          "s3:ListBucket"
-        ],
-        Resource = [
-          "arn:aws:s3:::stellar-path-s3-bucket",
-          "arn:aws:s3:::stellar-path-s3-bucket/*"
-        ]
-      }
-    ]
-  })
-}
-
 resource "aws_iam_policy" "terraform_state_access" {
   name        = "TerraformStateAccess"
   description = "Allow full access to the Terraform state bucket"
@@ -127,8 +47,8 @@ resource "aws_iam_policy" "terraform_state_access" {
           "s3:DeleteObject"
         ],
         Resource = [
-          "arn:aws:s3:::stellar-path-s3-bucket",
-          "arn:aws:s3:::stellar-path-s3-bucket/*"
+          "arn:aws:s3:::innerlens-website-path-s3-bucket",
+          "arn:aws:s3:::innerlens-website-path-s3-bucket/*"
         ]
       }
     ]
@@ -139,34 +59,6 @@ resource "aws_iam_role_policy_attachment" "ecr" {
   role       = aws_iam_role.github_actions.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser"
 }
-
-resource "aws_iam_role_policy_attachment" "ecs_task_execution_policy" {
-  role       = aws_iam_role.ecs_task_execution.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-}
-
-resource "aws_iam_role_policy_attachment" "ecs" {
-  role       = aws_iam_role.github_actions.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonECS_FullAccess"
-}
-
-resource "aws_iam_role_policy_attachment" "rds" {
-  role       = aws_iam_role.github_actions.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonRDSFullAccess"
-}
-
-resource "aws_iam_role_policy_attachment" "ecs_task_s3_attach" {
-  role       = aws_iam_role.ecs_task_role.name
-  policy_arn = aws_iam_policy.ecs_task_s3_read_only.arn
-}
-
-resource "aws_iam_role_policy_attachment" "github_actions_terraform_state" {
-  role       = aws_iam_role.github_actions.name
-  policy_arn = aws_iam_policy.terraform_state_access.arn
-}
-
-
-# IAM role for EC2 to access Secrets Manager
 
 resource "aws_iam_role" "ec2_role" {
   name = "ec2-secrets-access-role"
