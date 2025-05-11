@@ -1,55 +1,17 @@
 #!/bin/bash
-# Install Node.js and dependencies
-curl -sL https://rpm.nodesource.com/setup_18.x | bash -
-yum install -y nodejs git
+sudo apt update
+sudo apt install -y jq
+sudo apt install -y nodejs npm postgresql-client
 
-# Set working directory
-mkdir -p /opt/stellarpath
-cd /opt/stellarpath
+cd /home/ubuntu
+git clone https://github.com/LekalaKholofelo/test_deploy.git
+cd project/backend
+npm install
 
-# Copy or clone project files (if you have an S3 or Git repo, replace this accordingly)
-# This assumes the backend and frontend files are baked into the AMI or attached via EBS
-# Here we simulate placement
-echo "Setting up backend and frontend"
+# Fetch secrets from Secrets Manager and export them
+export DB_HOST=$(aws secretsmanager get-secret-value --secret-id db-secret --query 'SecretString' --output text | jq -r '.host')
+export DB_USER=$(aws secretsmanager get-secret-value --secret-id db-secret --query 'SecretString' --output text | jq -r '.username')
+export DB_PASS=$(aws secretsmanager get-secret-value --secret-id db-secret --query 'SecretString' --output text | jq -r '.password')
+export DB_NAME=$(aws secretsmanager get-secret-value --secret-id db-secret --query 'SecretString' --output text | jq -r '.dbname')
 
-cat <<EOF > /opt/stellarpath/server.js
-const express = require('express');
-const db = require('./db');
-const app = express();
-const PORT = process.env.PORT || 3000;
-app.use(express.static('frontend'));
-app.get('/welcome', async (req, res) => {
-  try {
-    const message = await db.getWelcomeMessage();
-    res.send(message);
-  } catch (err) {
-    res.status(500).send("Error fetching welcome message.");
-  }
-});
-app.listen(PORT, () => console.log(`Server started on ${PORT}`));
-EOF
-
-cat <<EOF > /opt/stellarpath/db.js
-const {{ Client }} = require('pg');
-require('dotenv').config();
-async function getWelcomeMessage() {
-  const client = new Client({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    database: process.env.DB_NAME,
-    password: process.env.DB_PASSWORD,
-    port: process.env.DB_PORT
-  });
-  await client.connect();
-  const res = await client.query('SELECT message FROM welcome LIMIT 1');
-  await client.end();
-  return res.rows[0]?.message || 'Welcome to StellarPath';
-}
-module.exports = {{ getWelcomeMessage }};
-EOF
-
-# Install backend dependencies
-npm install express pg dotenv
-
-# Start the backend
-node server.js > /var/log/stellarpath.log 2>&1 &
+node server.js
